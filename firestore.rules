@@ -1,0 +1,93 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: categories
+// Document ID: auto-generated
+// Fields:
+//   - name: string (required) - Category name
+//   - order: number (required) - Display order
+//
+// Collection: products
+// Document ID: auto-generated
+// Fields:
+//   - code: string (required) - Model code
+//   - name: string (required) - Model name
+//   - categoryId: string (required) - Reference to Category ID
+//   - imageUrl: string (required) - URL of the product image
+//   - pairsPerBox: number (required) - Number of pairs in one box
+//   - pricePerPair: number (required) - Price per single pair
+//   - totalBoxPrice: number (required) - Total price for the box
+//   - isAvailable: boolean (required) - Whether the product is in stock
+//   - createdAt: timestamp (optional) - Creation timestamp
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "ertadywomen@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidCategory(data) {
+      return hasOnlyAllowedFields(['name', 'order']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.order is number;
+    }
+
+    function isValidProduct(data) {
+      return hasOnlyAllowedFields(['code', 'name', 'categoryId', 'imageUrl', 'pairsPerBox', 'pricePerPair', 'totalBoxPrice', 'isAvailable', 'createdAt']) &&
+             data.code is string && data.code.size() > 0 && data.code.size() < 50 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
+             data.categoryId is string &&
+             data.imageUrl is string && data.imageUrl.size() > 0 &&
+             data.pairsPerBox is number && data.pairsPerBox > 0 &&
+             data.pricePerPair is number && data.pricePerPair >= 0 &&
+             data.totalBoxPrice is number && data.totalBoxPrice >= 0 &&
+             data.isAvailable is bool;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true; // Publicly readable catalog
+      allow write: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if true; // Publicly readable catalog
+      allow write: if isAdmin();
+    }
+  }
+}
